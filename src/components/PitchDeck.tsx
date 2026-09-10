@@ -40,9 +40,14 @@ export default function PitchDeck({ onClose }: PitchDeckProps) {
       content: "Local businesses pay to drop 'Golden Chirps' (exclusive offline discounts scattered around the city) that users discover organically through our acoustic mesh network."
     },
     {
+      title: "The Ultimate Vision",
+      subtitle: "Bluetooth Mesh.",
+      content: "Phones act as decentralized nodes. Once one device fetches local spots, it silently broadcasts that data to nearby phones via Bluetooth Low Energy (BLE). Those phones relay it forward, creating a viral, city-wide offline web."
+    },
+    {
       title: "Future Roadmap",
-      subtitle: "Native Bluetooth Mesh.",
-      content: "Right now we are a Progressive Web App to bypass App Store fees. Our next step is a native iOS and Android launch to unlock true background Bluetooth mesh networking. Thank you."
+      subtitle: "Native App Launch.",
+      content: "Right now we are a Progressive Web App to bypass App Store fees. Our next step is a native iOS and Android launch to unlock true background Bluetooth BLE mesh networking. Thank you."
     }
   ];
 
