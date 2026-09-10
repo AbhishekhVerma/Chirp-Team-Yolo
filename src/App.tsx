@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Heart, WifiOff, Users, Compass, Bookmark, Music, QrCode, X, Volume2, Ear, Camera, Radio } from 'lucide-react';
+import { MapPin, Heart, WifiOff, Users, Compass, Bookmark, Music, QrCode, X, Volume2, Ear, Camera, Radio, Map } from 'lucide-react';
 import VibesMap from './components/VibesMap';
 import ARView from './components/ARView';
 import { useSoundscape } from './hooks/useSoundscape';
@@ -206,13 +206,13 @@ export default function App() {
             <div>
               <input 
                 type="text" 
-                placeholder="Pick a magic handle..." 
+                placeholder="Pick a magic handle... (e.g. password123)" 
                 value={tempUsername}
                 onChange={e => setTempUsername(e.target.value)}
                 className="w-full px-4 py-4 rounded-xl glass-input"
                 required
               />
-              <p className="text-xs text-gray-700 mt-3 text-left font-medium">No password needed. Syncs across devices!</p>
+              <p className="text-xs text-gray-700 mt-3 text-left font-medium">For the demo, use <strong>password123</strong> (Syncs across devices!)</p>
             </div>
             <button 
               type="submit" 
@@ -235,45 +235,43 @@ export default function App() {
         onMouseEnter={() => isAudioPlaying && setVibeType(spot.type)}
         onClick={() => isAudioPlaying && setVibeType(spot.type)}
       >
-        <div className="flex justify-between items-start mb-2">
+        <div className="flex justify-between items-start mb-3">
           <div>
-            <div className="flex items-center space-x-2">
-              <h3 className="font-bold text-xl text-gray-900 drop-shadow-sm">{spot.name}</h3>
+            <h3 className="font-bold text-xl text-gray-900 drop-shadow-sm leading-tight">{spot.name}</h3>
+            <div className="flex items-center flex-wrap gap-2 mt-2">
               <span className="text-xs px-3 py-1 bg-white/40 text-gray-800 rounded-full font-bold backdrop-blur-sm border border-white/40">{spot.type}</span>
+              {chirpCounts[spot.id] && (
+                <span className="text-xs font-bold text-orange-500 animate-pulse flex items-center bg-orange-100/50 px-2 py-1 rounded-full border border-orange-200 shadow-sm">
+                   🔥 {chirpCounts[spot.id]} nearby
+                </span>
+              )}
             </div>
-            <p className="text-sm text-gray-700 font-semibold flex items-center mt-1">
+            <p className="text-sm text-gray-700 font-semibold flex items-center mt-3">
               <MapPin className="w-3 h-3 mr-1" /> {spot.distance} away
             </p>
           </div>
-          <div className="flex space-x-2 items-center">
-            {chirpCounts[spot.id] && (
-              <span className="text-xs font-bold text-orange-400 animate-pulse flex items-center mr-2">
-                 🔥 {chirpCounts[spot.id]} nearby
-              </span>
-            )}
-            <button 
-              onClick={(e) => { e.stopPropagation(); setShowQrSpot(spot.id); }}
-              className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors glass-button flex items-center text-xs font-bold text-gray-800"
-              title="Show QR Code"
-            >
-              <QrCode className="w-4 h-4 mr-1 text-gray-800" /> QR
-            </button>
-            <button 
-              onClick={(e) => { e.stopPropagation(); transmitChirp(spot.id); }}
-              className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors glass-button flex items-center text-xs font-bold text-gray-800"
-              title="Share via Audio Chirp"
-            >
-              <Volume2 className="w-4 h-4 mr-1 text-gray-800" /> Chirp
-            </button>
-            <button 
-              onClick={(e) => { e.stopPropagation(); toggleSave(spot.id); }}
-              className={`p-2 rounded-full flex items-center justify-center transition-all ${isSaved ? 'glass-button active' : 'glass-button'}`}
-            >
-              <Heart className={`w-5 h-5 ${isSaved ? 'fill-rose-500 text-rose-500' : 'text-gray-800'}`} />
-            </button>
-          </div>
+          <button 
+            onClick={(e) => { e.stopPropagation(); toggleSave(spot.id); }}
+            className={`p-2 shrink-0 rounded-full flex items-center justify-center transition-all shadow-sm ${isSaved ? 'glass-button active' : 'glass-button'}`}
+          >
+            <Heart className={`w-5 h-5 ${isSaved ? 'fill-rose-500 text-rose-500' : 'text-gray-800'}`} />
+          </button>
         </div>
-        <p className="text-gray-800 text-sm mt-2 font-medium">{spot.description}</p>
+        <p className="text-gray-800 text-sm mb-4 font-medium">{spot.description}</p>
+        <div className="flex space-x-3">
+          <button 
+            onClick={(e) => { e.stopPropagation(); setShowQrSpot(spot.id); }}
+            className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 transition-colors glass-button flex justify-center items-center text-sm font-bold text-gray-800 shadow-sm"
+          >
+            <QrCode className="w-4 h-4 mr-2 text-gray-800" /> QR
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); transmitChirp(spot.id); }}
+            className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 transition-colors glass-button flex justify-center items-center text-sm font-bold text-gray-800 shadow-sm"
+          >
+            <Volume2 className="w-4 h-4 mr-2 text-gray-800" /> Chirp
+          </button>
+        </div>
       </div>
     );
   };
@@ -306,20 +304,13 @@ export default function App() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto pb-4 hide-scrollbar">
+        <main className="p-4 pb-28 flex-1 overflow-y-auto">
           {activeTab === 'discover' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              
-              {/* The Map */}
-              <VibesMap spots={SPOTS} />
-
-              <div className="flex items-center justify-between mb-4 mt-2">
-                 <h2 className="text-xl font-bold text-gray-900 drop-shadow-sm flex items-center">
-                   <Compass className="w-5 h-5 mr-2 text-gray-800" /> Happening Now
-                 </h2>
-                 
-                 {/* Ambient Audio Toggle */}
-               <div className="flex space-x-2">
+              <h2 className="text-xl font-bold text-gray-900 drop-shadow-sm mb-4 flex items-center justify-between">
+                <span className="flex items-center"><Compass className="w-5 h-5 mr-2 text-gray-800" /> Happening Now</span>
+                
+                <div className="flex space-x-2">
                  <button 
                    onClick={() => setShowARView(true)}
                    className="px-3 py-1.5 rounded-full glass-button transition-all flex items-center text-xs font-bold text-gray-800"
@@ -335,11 +326,19 @@ export default function App() {
                    <Music className="w-4 h-4 mr-1" /> Ambient
                  </button>
                </div>
-            </div>
+            </h2>
             
             {SPOTS.map(renderSpotCard)}
           </div>
         )}
+
+          {activeTab === 'map' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-[calc(100vh-200px)]">
+              <div className="glass-panel p-2 rounded-[2rem] shadow-sm flex-1 overflow-hidden">
+                <VibesMap spots={SPOTS} />
+              </div>
+            </div>
+          )}
 
           {activeTab === 'friends' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -434,6 +433,12 @@ export default function App() {
             className={`flex flex-col items-center p-3 rounded-[1.5rem] transition-all w-16 ${activeTab === 'discover' ? 'glass-button active text-gray-900' : 'text-gray-600 hover:text-gray-900'}`}
           >
             <Compass className="w-6 h-6" />
+          </button>
+          <button 
+            onClick={() => setActiveTab('map')}
+            className={`flex flex-col items-center p-3 rounded-[1.5rem] transition-all w-16 ${activeTab === 'map' ? 'glass-button active text-gray-900' : 'text-gray-600 hover:text-gray-900'}`}
+          >
+            <Map className="w-6 h-6" />
           </button>
           <button 
             onClick={() => setActiveTab('friends')}

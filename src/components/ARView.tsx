@@ -25,6 +25,10 @@ export default function ARView({ spots, onClose }: ARViewProps) {
       .then(stream => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          // iOS Safari Fix: Explicitly play the video once metadata is loaded
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current?.play().catch(e => console.warn('Video play blocked:', e));
+          };
         }
       })
       .catch(() => setError('Camera access denied or unavailable.'));
