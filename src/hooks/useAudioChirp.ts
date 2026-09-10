@@ -24,8 +24,21 @@ export function useAudioChirp() {
 
   const startListening = async () => {
     try {
-      streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Disabling noise suppression is CRITICAL for detecting pure sine waves!
+      streamRef.current = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        } 
+      });
+      
       audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // iOS Fix: explicitly resume context
+      if (audioCtxRef.current.state === 'suspended') {
+        await audioCtxRef.current.resume();
+      }
       
       const source = audioCtxRef.current.createMediaStreamSource(streamRef.current);
       const analyser = audioCtxRef.current.createAnalyser();
@@ -42,29 +55,24 @@ export function useAudioChirp() {
         if (!isListeningRef.current) return;
         analyser.getByteFrequencyData(dataArray);
         
-        let maxEnergy = 0;
-        let maxIndex = 0;
-        
-        // Find peak frequency in the expected range
-        for(let i = 0; i < bufferLength; i++) {
-          if (dataArray[i] > maxEnergy) {
-            maxEnergy = dataArray[i];
-            maxIndex = i;
+        // Targeted Frequency Detection (Instead of global max energy)
+        for (const [id, freq] of Object.entries(FREQ_MAP)) {
+          // Find the exact bin for our target frequency
+          const binIndex = Math.round((freq / (sampleRate / 2)) * bufferLength);
+          
+          // Check a small window (+/- 2 bins) around the target frequency
+          let localMax = 0;
+          const windowSize = 2;
+          for (let i = Math.max(0, binIndex - windowSize); i <= Math.min(bufferLength - 1, binIndex + windowSize); i++) {
+            if (dataArray[i] > localMax) localMax = dataArray[i];
           }
-        }
-
-        const peakFrequency = maxIndex * (sampleRate / 2) / bufferLength;
-        
-        // Simple FSK decoding based on peak energy map (lowered threshold to 120 for reliability)
-        if (maxEnergy > 120) {
-          for (const [id, freq] of Object.entries(FREQ_MAP)) {
-            // Check if peak frequency is within 200Hz tolerance of our mapped frequency
-            if (Math.abs(peakFrequency - freq) < 200) {
-              setReceivedSpotId(id);
-              setChirpCounts(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-              stopListening();
-              return;
-            }
+          
+          // If the energy *specifically at this frequency* is high enough, trigger!
+          if (localMax > 160) {
+            setReceivedSpotId(id);
+            setChirpCounts(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+            stopListening();
+            return;
           }
         }
         
@@ -88,29 +96,35 @@ export function useAudioChirp() {
     }
   };
 
-  const transmitChirp = (spotId: string) => {
+  const transmitChirp = async (spotId: string) => {
     const targetFreq = FREQ_MAP[spotId] || 2000;
     
     // Increment local viral heatmap when transmitting too
     setChirpCounts(prev => ({ ...prev, [spotId]: (prev[spotId] || 0) + 1 }));
     
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    // iOS Fix: explicitly resume context
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     
     osc.type = 'sine';
     osc.frequency.setValueAtTime(targetFreq, ctx.currentTime);
     
-    // Envelope to avoid popping, louder volume (1.0)
+    // Envelope to avoid popping, louder volume, longer duration for easier detection
     gain.gain.setValueAtTime(0, ctx.currentTime);
     gain.gain.linearRampToValueAtTime(1.0, ctx.currentTime + 0.1);
-    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.8);
     
     osc.connect(gain);
     gain.connect(ctx.destination);
     
     osc.start();
-    osc.stop(ctx.currentTime + 0.6);
+    osc.stop(ctx.currentTime + 0.9);
   };
 
   return { isListening, startListening, stopListening, transmitChirp, receivedSpotId, setReceivedSpotId, chirpCounts };
