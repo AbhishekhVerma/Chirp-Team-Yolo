@@ -25,9 +25,9 @@ export default function PitchDeck({ onClose }: PitchDeckProps) {
       content: "We built a custom FSK audio modem in the browser. If you find a cool spot, your phone emits a high frequency audio chirp. Your friend's phone hears it, decodes it, and saves the spot. Zero internet required."
     },
     {
-      title: "Immersive Discovery",
-      subtitle: "AR & Soundscapes.",
-      content: "We use your phone's gyroscope to project locations in augmented reality. We use your GPS walking speed to generate dynamic ambient audio using synthesizers. The app feels alive."
+      title: "Sensory UI",
+      subtitle: "AR & Ambient Audio.",
+      content: "We use your phone's gyroscope to project locations in augmented reality. We use your GPS walking speed to generate dynamic, ambient background music. The app reacts to how you move."
     },
     {
       title: "Target Audience",
