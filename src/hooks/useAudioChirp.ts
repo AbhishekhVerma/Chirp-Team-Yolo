@@ -9,6 +9,7 @@ export function useAudioChirp() {
   const isListeningRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const mockTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     isListeningRef.current = isListening;
@@ -19,6 +20,16 @@ export function useAudioChirp() {
       if (!audioCtxRef.current) {
         audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
+
+      // HACKATHON DEMO MOCK: Automatically trigger Spot #2 after 5 seconds
+      mockTimeoutRef.current = setTimeout(() => {
+        if (isListeningRef.current) {
+          const mockSpotId = '2'; // They requested the "two chirps" option (Spot #2)
+          setReceivedSpotId(mockSpotId);
+          setChirpCounts(prev => ({ ...prev, [mockSpotId]: (prev[mockSpotId] || 0) + 1 }));
+          stopListening();
+        }
+      }, 5000);
 
       streamRef.current = await navigator.mediaDevices.getUserMedia({ 
         audio: true // Removed aggressive constraints (echoCancellation: false, etc.) which cause some Windows Realtek drivers to return dead silent streams
@@ -113,6 +124,9 @@ export function useAudioChirp() {
 
   const stopListening = () => {
     setIsListening(false);
+    if (mockTimeoutRef.current) {
+      clearTimeout(mockTimeoutRef.current);
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
     }
