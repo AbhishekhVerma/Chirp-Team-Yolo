@@ -56,21 +56,26 @@ export function useAudioChirp() {
         if (!isListeningRef.current) return;
         analyser.getByteFrequencyData(dataArray);
         
+        let globalMax = 0;
         let rangeMax = 0;
-        for (let i = minBin; i <= maxBin; i++) {
-          if (dataArray[i] > rangeMax) rangeMax = dataArray[i];
+        
+        for (let i = 0; i < bufferLength; i++) {
+          if (dataArray[i] > globalMax) globalMax = dataArray[i];
+          if (i >= minBin && i <= maxBin) {
+            if (dataArray[i] > rangeMax) rangeMax = dataArray[i];
+          }
         }
         
-        if (Math.random() < 0.2) setDebugVolume(rangeMax); // Update visualizer
+        if (Math.random() < 0.2) setDebugVolume(globalMax); // Update visualizer with overall mic level
 
         const now = Date.now();
 
-        // Very basic amplitude envelope detection
-        if (rangeMax > 120 && !isHigh) {
+        // Lower threshold to 80 to ensure we catch quiet chirps
+        if (rangeMax > 80 && !isHigh) {
           isHigh = true;
           currentChirpCount++;
           lastChirpTime = now;
-        } else if (rangeMax < 80 && isHigh) {
+        } else if (rangeMax < 50 && isHigh) {
           // Add a tiny debounce to prevent double-counting a single chirp
           if (now - lastChirpTime > 150) {
             isHigh = false;
