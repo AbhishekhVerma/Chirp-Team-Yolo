@@ -13,6 +13,7 @@ export function useAudioChirp() {
   const [isListening, setIsListening] = useState(false);
   const [receivedSpotId, setReceivedSpotId] = useState<string | null>(null);
   const [chirpCounts, setChirpCounts] = useState<Record<string, number>>({});
+  const [debugVolume, setDebugVolume] = useState<number>(0); // Visual proof of life
   
   const isListeningRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -24,7 +25,13 @@ export function useAudioChirp() {
 
   const startListening = async () => {
     try {
-      // Disabling noise suppression is CRITICAL for detecting pure sine waves!
+      // CRITICAL IOS FIX: AudioContext MUST be created synchronously in the click handler!
+      // If we wait for getUserMedia first, iOS Safari permanently mutes the context.
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+
+      // Now request microphone
       streamRef.current = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: false,
@@ -33,9 +40,7 @@ export function useAudioChirp() {
         } 
       });
       
-      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
-      // iOS Fix: explicitly resume context
+      // Resume context explicitly
       if (audioCtxRef.current.state === 'suspended') {
         await audioCtxRef.current.resume();
       }
@@ -43,6 +48,7 @@ export function useAudioChirp() {
       const source = audioCtxRef.current.createMediaStreamSource(streamRef.current);
       const analyser = audioCtxRef.current.createAnalyser();
       analyser.fftSize = 2048; // Bins size
+      analyser.smoothingTimeConstant = 0.2; // React faster
       source.connect(analyser);
 
       setIsListening(true);
@@ -55,20 +61,29 @@ export function useAudioChirp() {
         if (!isListeningRef.current) return;
         analyser.getByteFrequencyData(dataArray);
         
-        // Targeted Frequency Detection (Instead of global max energy)
+        // Track absolute max volume across all frequencies for debugging
+        let globalMax = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          if (dataArray[i] > globalMax) globalMax = dataArray[i];
+        }
+        
+        // Update debug volume occasionally to prevent React lag
+        if (Math.random() < 0.1) {
+          setDebugVolume(globalMax);
+        }
+
+        // Targeted Frequency Detection
         for (const [id, freq] of Object.entries(FREQ_MAP)) {
-          // Find the exact bin for our target frequency
           const binIndex = Math.round((freq / (sampleRate / 2)) * bufferLength);
           
-          // Check a small window (+/- 2 bins) around the target frequency
           let localMax = 0;
-          const windowSize = 2;
+          const windowSize = 3;
           for (let i = Math.max(0, binIndex - windowSize); i <= Math.min(bufferLength - 1, binIndex + windowSize); i++) {
             if (dataArray[i] > localMax) localMax = dataArray[i];
           }
           
-          // If the energy *specifically at this frequency* is high enough, trigger!
-          if (localMax > 160) {
+          // Lowered threshold to 75 just to be absolutely certain it catches it
+          if (localMax > 75) {
             setReceivedSpotId(id);
             setChirpCounts(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
             stopListening();
@@ -81,7 +96,8 @@ export function useAudioChirp() {
       
       checkAudio();
 
-    } catch (e) {
+    } catch (e: any) {
+      alert("Microphone Error: " + (e.message || "Access denied."));
       console.error("Mic access denied or error:", e);
     }
   };
@@ -127,5 +143,5 @@ export function useAudioChirp() {
     osc.stop(ctx.currentTime + 0.9);
   };
 
-  return { isListening, startListening, stopListening, transmitChirp, receivedSpotId, setReceivedSpotId, chirpCounts };
+  return { isListening, startListening, stopListening, transmitChirp, receivedSpotId, setReceivedSpotId, chirpCounts, debugVolume };
 }

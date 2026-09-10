@@ -40,7 +40,7 @@ export default function App() {
 
   // Sensory Hooks
   const { isPlaying: isAudioPlaying, setIsPlaying: setIsAudioPlaying, setVibeType } = useSoundscape();
-  const { isListening, startListening, stopListening, transmitChirp, receivedSpotId, setReceivedSpotId, chirpCounts } = useAudioChirp();
+  const { isListening, startListening, stopListening, transmitChirp, receivedSpotId, setReceivedSpotId, chirpCounts, debugVolume } = useAudioChirp();
   const { isScanning, scanForFriends, foundDevices, error: btError } = useBluetoothSync();
 
   const [isInitialized, setIsInitialized] = useState(false);
@@ -369,6 +369,18 @@ export default function App() {
                   </button>
                 </div>
               </h2>
+
+              {isListening && (
+                <div className="flex flex-col items-center justify-center py-2 animate-in fade-in">
+                  <span className="text-[10px] text-gray-500 mb-1 tracking-wider uppercase font-bold">Mic Input Level</span>
+                  <div className="w-full h-1.5 bg-gray-200/50 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-green-400 to-emerald-600 transition-all duration-75" 
+                      style={{ width: `${(debugVolume / 255) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Offline Cache Warning */}
               {isOffline && (
