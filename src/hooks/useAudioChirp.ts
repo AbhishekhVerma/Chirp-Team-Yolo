@@ -1,19 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 
-// Maps spot ID to specific frequency (Audible ranges are much more reliable across mobile mics)
-const FREQ_MAP: Record<string, number> = {
-  '1': 2000,
-  '2': 2500,
-  '3': 3000,
-  '4': 3500,
-  '5': 4000
-};
-
 export function useAudioChirp() {
   const [isListening, setIsListening] = useState(false);
   const [receivedSpotId, setReceivedSpotId] = useState<string | null>(null);
   const [chirpCounts, setChirpCounts] = useState<Record<string, number>>({});
-  const [debugVolume, setDebugVolume] = useState<number>(0); // Visual proof of life
+  const [debugVolume, setDebugVolume] = useState<number>(0); 
   
   const isListeningRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -25,13 +16,10 @@ export function useAudioChirp() {
 
   const startListening = async () => {
     try {
-      // CRITICAL IOS FIX: AudioContext MUST be created synchronously in the click handler!
-      // If we wait for getUserMedia first, iOS Safari permanently mutes the context.
       if (!audioCtxRef.current) {
         audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
 
-      // Now request microphone
       streamRef.current = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: false,
@@ -40,52 +28,65 @@ export function useAudioChirp() {
         } 
       });
       
-      // Resume context explicitly
       if (audioCtxRef.current.state === 'suspended') {
         await audioCtxRef.current.resume();
       }
       
       const source = audioCtxRef.current.createMediaStreamSource(streamRef.current);
       const analyser = audioCtxRef.current.createAnalyser();
-      analyser.fftSize = 2048; // Bins size
-      analyser.smoothingTimeConstant = 0.2; // React faster
+      analyser.fftSize = 512; 
+      analyser.smoothingTimeConstant = 0.1; // Extremely fast reaction
       source.connect(analyser);
 
       setIsListening(true);
       
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
-      const sampleRate = audioCtxRef.current.sampleRate; // usually 44100 or 48000
+      const sampleRate = audioCtxRef.current.sampleRate;
+      
+      // Target range 2000Hz - 3000Hz
+      const minBin = Math.floor((2000 / (sampleRate / 2)) * bufferLength);
+      const maxBin = Math.ceil((3000 / (sampleRate / 2)) * bufferLength);
+      
+      let isHigh = false;
+      let currentChirpCount = 0;
+      let lastChirpTime = Date.now();
       
       const checkAudio = () => {
         if (!isListeningRef.current) return;
         analyser.getByteFrequencyData(dataArray);
         
-        // Track absolute max volume across all frequencies for debugging
-        let globalMax = 0;
-        for (let i = 0; i < bufferLength; i++) {
-          if (dataArray[i] > globalMax) globalMax = dataArray[i];
+        let rangeMax = 0;
+        for (let i = minBin; i <= maxBin; i++) {
+          if (dataArray[i] > rangeMax) rangeMax = dataArray[i];
         }
         
-        // Update debug volume occasionally to prevent React lag
-        if (Math.random() < 0.1) {
-          setDebugVolume(globalMax);
+        if (Math.random() < 0.2) setDebugVolume(rangeMax); // Update visualizer
+
+        const now = Date.now();
+
+        // Very basic amplitude envelope detection
+        if (rangeMax > 120 && !isHigh) {
+          isHigh = true;
+          currentChirpCount++;
+          lastChirpTime = now;
+        } else if (rangeMax < 80 && isHigh) {
+          // Add a tiny debounce to prevent double-counting a single chirp
+          if (now - lastChirpTime > 150) {
+            isHigh = false;
+          }
         }
 
-        // Targeted Frequency Detection
-        for (const [id, freq] of Object.entries(FREQ_MAP)) {
-          const binIndex = Math.round((freq / (sampleRate / 2)) * bufferLength);
+        // If we heard chirps, but it's been silent for 1.2 seconds, evaluate the count!
+        if (currentChirpCount > 0 && now - lastChirpTime > 1200) {
+          const spotId = currentChirpCount.toString();
+          // Reset
+          currentChirpCount = 0;
+          isHigh = false;
           
-          let localMax = 0;
-          const windowSize = 3;
-          for (let i = Math.max(0, binIndex - windowSize); i <= Math.min(bufferLength - 1, binIndex + windowSize); i++) {
-            if (dataArray[i] > localMax) localMax = dataArray[i];
-          }
-          
-          // Lowered threshold to 75 just to be absolutely certain it catches it
-          if (localMax > 75) {
-            setReceivedSpotId(id);
-            setChirpCounts(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+          if (['1', '2', '3', '4', '5'].includes(spotId)) {
+            setReceivedSpotId(spotId);
+            setChirpCounts(prev => ({ ...prev, [spotId]: (prev[spotId] || 0) + 1 }));
             stopListening();
             return;
           }
@@ -98,7 +99,7 @@ export function useAudioChirp() {
 
     } catch (e: any) {
       alert("Microphone Error: " + (e.message || "Access denied."));
-      console.error("Mic access denied or error:", e);
+      console.error("Mic access denied:", e);
     }
   };
 
@@ -107,40 +108,44 @@ export function useAudioChirp() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
     }
-    if (audioCtxRef.current) {
-      audioCtxRef.current.close();
-    }
   };
 
   const transmitChirp = async (spotId: string) => {
-    const targetFreq = FREQ_MAP[spotId] || 2000;
+    const numChirps = parseInt(spotId, 10);
+    if (isNaN(numChirps) || numChirps < 1 || numChirps > 5) return;
     
-    // Increment local viral heatmap when transmitting too
     setChirpCounts(prev => ({ ...prev, [spotId]: (prev[spotId] || 0) + 1 }));
     
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    
-    // iOS Fix: explicitly resume context
     if (ctx.state === 'suspended') {
       await ctx.resume();
     }
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(targetFreq, ctx.currentTime);
-    
-    // Envelope to avoid popping, louder volume, longer duration for easier detection
-    gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(1.0, ctx.currentTime + 0.1);
-    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.8);
-    
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.start();
-    osc.stop(ctx.currentTime + 0.9);
+    const playPeep = (timeOffset: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = 'sine';
+      // Bird-like slide up from 2000Hz to 3000Hz
+      osc.frequency.setValueAtTime(2000, ctx.currentTime + timeOffset);
+      osc.frequency.exponentialRampToValueAtTime(3000, ctx.currentTime + timeOffset + 0.15);
+      
+      // Quick attack, quick release
+      gain.gain.setValueAtTime(0, ctx.currentTime + timeOffset);
+      gain.gain.linearRampToValueAtTime(1.0, ctx.currentTime + timeOffset + 0.02);
+      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + timeOffset + 0.15);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start(ctx.currentTime + timeOffset);
+      osc.stop(ctx.currentTime + timeOffset + 0.15);
+    };
+
+    // Play N chirps spaced 350ms apart
+    for (let i = 0; i < numChirps; i++) {
+      playPeep(i * 0.35);
+    }
   };
 
   return { isListening, startListening, stopListening, transmitChirp, receivedSpotId, setReceivedSpotId, chirpCounts, debugVolume };

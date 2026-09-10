@@ -20,9 +20,9 @@ export default function PitchDeck({ onClose }: PitchDeckProps) {
       content: "A local-first discovery app that does not care if you have cell service. It caches your world locally and uses physical hardware to share data when the internet goes down."
     },
     {
-      title: "Sensory Tech",
-      subtitle: "Audio Chirp Mesh.",
-      content: "We built a custom FSK audio modem in the browser. If you find a cool spot, your phone emits a high frequency audio chirp. Your friend's phone hears it, decodes it, and saves the spot. Zero internet required."
+      title: "Literal Chirps",
+      subtitle: "Sound as Data.",
+      content: "To share a spot without internet, our app literally 'chirps' like a bird. Spot #3? It emits 3 fast chirps. Your friend's phone counts the chirps and instantly caches the spot. A beautiful, audible, offline data transfer."
     },
     {
       title: "Sensory UI",
