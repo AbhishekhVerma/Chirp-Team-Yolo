@@ -19,7 +19,7 @@ export default function VibesMap({ spots }: MapProps) {
   const center: [number, number] = [25.2048, 55.2708];
 
   return (
-    <div className="h-64 w-full rounded-2xl overflow-hidden shadow-lg border border-white/20 relative z-0 mb-4">
+    <div className="h-full w-full rounded-2xl overflow-hidden shadow-lg border border-white/20 relative z-0">
       <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
