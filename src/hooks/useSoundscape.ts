@@ -6,7 +6,7 @@ export function useSoundscape() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const oscillatorsRef = useRef<OscillatorNode[]>([]);
   const gainNodeRef = useRef<GainNode | null>(null);
-
+  const filterRef = useRef<BiquadFilterNode | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const initAudio = () => {
@@ -17,16 +17,25 @@ export function useSoundscape() {
       gain.connect(audioCtxRef.current.destination);
       gainNodeRef.current = gain;
     }
+    // Always attempt to resume in case it's suspended (crucial for iOS)
+    if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume();
+    }
   };
 
   const playVibe = (type: string) => {
+    if (!isPlaying) return; // Only play if toggled on
     initAudio();
     if (!audioCtxRef.current || !gainNodeRef.current) return;
 
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-    // Fade out existing
-    gainNodeRef.current.gain.setTargetAtTime(0, audioCtxRef.current.currentTime, 0.5);
+    const ctx = audioCtxRef.current;
+    const gain = gainNodeRef.current;
+
+    // Fade out existing gracefully
+    gain.gain.cancelScheduledValues(ctx.currentTime);
+    gain.gain.setTargetAtTime(0, ctx.currentTime, 0.2);
 
     timeoutRef.current = setTimeout(() => {
       // Stop old oscillators
@@ -38,68 +47,83 @@ export function useSoundscape() {
 
       if (!isPlaying) return;
 
-      const ctx = audioCtxRef.current!;
-      const gain = gainNodeRef.current!;
-
       // Create new generators based on type
       let freqs = [220, 277.18, 329.63]; // A major default
       let waveType: OscillatorType = 'sine';
+      let targetVolume = 0.4;
 
       if (type === 'Food') {
         freqs = [196, 246.94, 293.66]; // G major (warm)
         waveType = 'triangle';
+        targetVolume = 0.4;
       } else if (type === 'Event') {
         freqs = [261.63, 329.63, 392.00]; // C major (energetic)
         waveType = 'sine';
+        targetVolume = 0.5;
       } else if (type === 'Fun') {
         freqs = [146.83, 174.61, 220.00]; // D minor (retro/arcade)
-        waveType = 'square';
-        gain.gain.value = 0.05; // square is loud
+        waveType = 'triangle'; // Square is too harsh for ambient
+        targetVolume = 0.3;
       }
 
       // Filter to make it ambient
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      
-      // Modulate filter based on speed (Environmental API)
-      let currentSpeed = 0;
-      if (navigator.geolocation) {
-        navigator.geolocation.watchPosition((pos) => {
-          if (pos.coords.speed && pos.coords.speed > 0) {
-            currentSpeed = pos.coords.speed;
-            // Higher speed = brighter sound (higher cutoff)
-            filter.frequency.setTargetAtTime(800 + (currentSpeed * 200), ctx.currentTime, 0.5);
-          }
-        }, () => {}, { enableHighAccuracy: true });
+      if (!filterRef.current) {
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.connect(gain);
+        filterRef.current = filter;
+        
+        // Modulate filter based on speed (Environmental API)
+        if (navigator.geolocation) {
+          navigator.geolocation.watchPosition((pos) => {
+            if (pos.coords.speed && pos.coords.speed > 0) {
+              const currentSpeed = pos.coords.speed;
+              // Higher speed = brighter sound (higher cutoff)
+              if (filterRef.current) {
+                 filterRef.current.frequency.setTargetAtTime(600 + (currentSpeed * 300), ctx.currentTime, 0.5);
+              }
+            }
+          }, () => {}, { enableHighAccuracy: true });
+        }
       }
 
-      filter.frequency.value = 800 + (currentSpeed * 200);
-      filter.connect(gain);
+      filterRef.current.frequency.value = 800; // Default cutoff
 
       freqs.forEach(freq => {
         const osc = ctx.createOscillator();
         osc.type = waveType;
         osc.frequency.value = freq;
         osc.detune.value = (Math.random() - 0.5) * 10;
-        osc.connect(filter);
+        osc.connect(filterRef.current!);
         osc.start();
         oscillatorsRef.current.push(osc);
       });
 
-      // Fade in
-      gain.gain.setTargetAtTime(waveType === 'square' ? 0.02 : 0.1, ctx.currentTime, 1);
-    }, 600);
+      // Fade in to new target volume
+      gain.gain.cancelScheduledValues(ctx.currentTime);
+      gain.gain.setTargetAtTime(targetVolume, ctx.currentTime, 1.0);
+    }, 300); // Shorter crossfade
   };
 
   useEffect(() => {
     if (isPlaying) {
-      if (audioCtxRef.current?.state === 'suspended') {
-        audioCtxRef.current.resume();
-      }
+      initAudio();
       playVibe('Food'); // Default start
     } else {
       if (gainNodeRef.current && audioCtxRef.current) {
-        gainNodeRef.current.gain.setTargetAtTime(0, audioCtxRef.current.currentTime, 0.5);
+        gainNodeRef.current.gain.cancelScheduledValues(audioCtxRef.current.currentTime);
+        gainNodeRef.current.gain.setTargetAtTime(0, audioCtxRef.current.currentTime, 0.2);
+        
+        // Clean up immediately if stopped
+        setTimeout(() => {
+          if (!isPlaying) { // check if still not playing
+            oscillatorsRef.current.forEach(osc => {
+              try { osc.stop(); } catch(e) {}
+              osc.disconnect();
+            });
+            oscillatorsRef.current = [];
+          }
+        }, 300);
       }
     }
   }, [isPlaying]);
