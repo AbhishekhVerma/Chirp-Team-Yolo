@@ -26,6 +26,8 @@ const INITIAL_FEED = [
 export default function App() {
   const [username, setUsername] = useState(() => localStorage.getItem('vibes_user') || '');
   const [tempUsername, setTempUsername] = useState('');
+  const [tempPassword, setTempPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [activeTab, setActiveTab] = useState('discover');
   
@@ -142,6 +144,10 @@ export default function App() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    if (tempPassword !== 'password123') {
+      setLoginError('Incorrect password. For the demo, use: password123');
+      return;
+    }
     if (tempUsername.trim()) {
       localStorage.setItem('vibes_user', tempUsername.trim());
       setUsername(tempUsername.trim());
@@ -206,13 +212,22 @@ export default function App() {
             <div>
               <input 
                 type="text" 
-                placeholder="Pick a magic handle... (e.g. password123)" 
+                placeholder="Handle (e.g. @coolkid)" 
                 value={tempUsername}
                 onChange={e => setTempUsername(e.target.value)}
+                className="w-full px-4 py-4 rounded-xl glass-input mb-3"
+                required
+              />
+              <input 
+                type="password" 
+                placeholder="Password" 
+                value={tempPassword}
+                onChange={e => { setTempPassword(e.target.value); setLoginError(''); }}
                 className="w-full px-4 py-4 rounded-xl glass-input"
                 required
               />
-              <p className="text-xs text-gray-700 mt-3 text-left font-medium">For the demo, use <strong>password123</strong> (Syncs across devices!)</p>
+              {loginError && <p className="text-red-500 text-xs mt-2 font-bold text-left">{loginError}</p>}
+              <p className="text-xs text-gray-700 mt-3 text-left font-medium">For the demo, use <strong>password123</strong> as the password.</p>
             </div>
             <button 
               type="submit" 
