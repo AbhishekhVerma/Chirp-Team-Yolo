@@ -21,11 +21,7 @@ export function useAudioChirp() {
       }
 
       streamRef.current = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false
-        } 
+        audio: true // Removed aggressive constraints (echoCancellation: false, etc.) which cause some Windows Realtek drivers to return dead silent streams
       });
       
       if (audioCtxRef.current.state === 'suspended') {
@@ -39,6 +35,13 @@ export function useAudioChirp() {
       source.connect(analyser);
 
       setIsListening(true);
+      
+      // Safety net: Force resume continuously if the browser is stubbornly blocking it
+      setInterval(() => {
+        if (audioCtxRef.current?.state === 'suspended') {
+          audioCtxRef.current.resume();
+        }
+      }, 500);
       
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
